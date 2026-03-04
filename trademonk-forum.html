@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradeMonk Community — Trader Forum</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#080b0f;--bg2:#0d1117;--bg3:#111820;--card:#131c26;--card2:#182230;
+  --border:#1e2d3d;--border2:#243344;
+  --buy:#00d68f;--buy-dim:rgba(0,214,143,.12);
+  --sell:#ff4757;--sell-dim:rgba(255,71,87,.12);
+  --hold:#f5a623;--hold-dim:rgba(245,166,35,.12);
+  --ai:#7c6af5;--ai-dim:rgba(124,106,245,.12);
+  --text:#e2eaf4;--muted:#5a7a9a;--muted2:#3d5a75;
+  --gold:#f5c842;--cyan:#00c8e8;
+}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg2)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── TOPBAR ── */
+.topbar{position:sticky;top:0;z-index:100;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;height:56px;gap:12px}
+.logo{display:flex;align-items:center;gap:10px;padding-right:20px;border-right:1px solid var(--border);text-decoration:none;flex-shrink:0}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--buy),var(--cyan));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;letter-spacing:-.3px;color:var(--text)}
+.logo-text span{color:var(--buy)}
+.forum-badge{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ai);background:var(--ai-dim);border:1px solid rgba(124,106,245,.3);padding:3px 10px;border-radius:20px;letter-spacing:.5px;flex-shrink:0}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.live-count{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--buy);animation:pulse 1.5s infinite;display:inline-block}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.tb-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.tb-btn:hover{border-color:var(--buy);color:var(--buy)}
+.tb-btn.primary{background:var(--ai);border-color:var(--ai);color:#fff;font-weight:600}
+.tb-btn.primary:hover{opacity:.85}
+.conn-pill{font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 10px;border-radius:12px;border:1px solid;display:flex;align-items:center;gap:5px;flex-shrink:0;transition:all .3s}
+.conn-pill.connected{color:var(--buy);border-color:rgba(0,214,143,.35);background:var(--buy-dim)}
+.conn-pill.disconnected{color:var(--sell);border-color:rgba(255,71,87,.35);background:var(--sell-dim)}
+.conn-pill.offline{color:var(--hold);border-color:rgba(245,166,35,.35);background:var(--hold-dim)}
+
+/* ── LAYOUT ── */
+.layout{display:grid;grid-template-columns:240px 1fr 280px;gap:16px;max-width:1440px;margin:0 auto;padding:20px}
+@media(max-width:1200px){.layout{grid-template-columns:200px 1fr 260px}}
+@media(max-width:960px){.layout{grid-template-columns:1fr 260px}.left-col{display:none}}
+@media(max-width:680px){.layout{grid-template-columns:1fr;padding:12px}.right-col{display:none}}
+
+/* ── SIDE CARDS ── */
+.side-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.side-title{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:12px}
+.topic-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:all .2s;font-size:13px;color:var(--muted)}
+.topic-item:hover{background:var(--bg3);color:var(--text)}
+.topic-item.active{background:var(--buy-dim);color:var(--buy)}
+.topic-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0}
+.topic-count{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted2);background:var(--bg3);padding:2px 7px;border-radius:8px}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-box{background:var(--bg3);border-radius:8px;padding:10px;text-align:center}
+.stat-num{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--buy)}
+.stat-lbl{font-size:10px;color:var(--muted);margin-top:2px}
+.ticker-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer;transition:opacity .2s}
+.ticker-row:last-child{border-bottom:none}
+.ticker-row:hover{opacity:.7}
+.ticker-sym{font-family:'JetBrains Mono',monospace;color:var(--cyan);font-size:11px}
+.ticker-chg{font-family:'JetBrains Mono',monospace;font-size:11px}
+
+/* ── COMPOSE ── */
+.compose-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.compose-top{display:flex;gap:12px}
+.avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-family:'Syne',sans-serif;flex-shrink:0;font-size:14px}
+.compose-inner{flex:1;display:flex;flex-direction:column;gap:10px}
+.compose-ta{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;resize:none;min-height:44px;max-height:200px;outline:none;transition:border-color .2s;line-height:1.6}
+.compose-ta:focus{border-color:var(--ai);min-height:88px}
+.compose-ta::placeholder{color:var(--muted2)}
+.compose-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.c-sel{background:var(--bg3);border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:6px;font-family:'Outfit',sans-serif;font-size:12px;cursor:pointer;outline:none}
+.c-sel option{background:var(--card)}
+.c-inp{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 12px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;outline:none;width:160px}
+.c-inp::placeholder{color:var(--muted2)}
+.post-btn{margin-left:auto;background:var(--ai);border:none;color:#fff;padding:7px 20px;border-radius:7px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:opacity .2s;white-space:nowrap}
+.post-btn:hover{opacity:.85}
+.post-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── SORT BAR ── */
+.sort-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap}
+.sort-lbl{font-size:12px;color:var(--muted)}
+.sort-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;font-family:'Outfit',sans-serif}
+.sort-btn.active,.sort-btn:hover{border-color:var(--buy);color:var(--buy);background:var(--buy-dim)}
+.search-wrap{margin-left:auto;display:flex;align-items:center;gap:7px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:5px 12px}
+.search-wrap input{background:none;border:none;outline:none;color:var(--text);font-family:'Outfit',sans-serif;font-size:12px;width:140px}
+.search-wrap input::placeholder{color:var(--muted2)}
+
+/* ── POST CARD ── */
+.post-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;transition:border-color .2s;animation:fadeUp .3s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.post-card:hover{border-color:var(--border2)}
+.post-hdr{display:flex;align-items:flex-start;gap:11px;margin-bottom:11px}
+.post-meta{flex:1;min-width:0}
+.post-author{font-family:'Syne',sans-serif;font-weight:700;font-size:14px}
+.post-time{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:1px}
+.post-tag{font-size:10px;padding:3px 9px;border-radius:10px;font-family:'JetBrains Mono',monospace;border:1px solid;white-space:nowrap;flex-shrink:0}
+.tag-bull{color:var(--buy);border-color:rgba(0,214,143,.3);background:var(--buy-dim)}
+.tag-bear{color:var(--sell);border-color:rgba(255,71,87,.3);background:var(--sell-dim)}
+.tag-analysis{color:var(--ai);border-color:rgba(124,106,245,.3);background:var(--ai-dim)}
+.tag-news{color:var(--gold);border-color:rgba(245,200,66,.3);background:rgba(245,200,66,.08)}
+.tag-qa{color:var(--cyan);border-color:rgba(0,200,232,.3);background:rgba(0,200,232,.08)}
+.tag-strategy{color:var(--hold);border-color:rgba(245,166,35,.3);background:var(--hold-dim)}
+.post-tickers{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.post-ticker{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--bg3);border:1px solid var(--border2);padding:2px 8px;border-radius:5px;color:var(--cyan)}
+.post-title{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;line-height:1.45;cursor:pointer;transition:color .2s;margin-bottom:6px}
+.post-title:hover{color:var(--ai)}
+.post-body{font-size:13px;color:rgba(226,234,244,.78);line-height:1.75;margin-bottom:10px}
+.post-footer{display:flex;align-items:center;gap:4px;border-top:1px solid var(--border);padding-top:10px;flex-wrap:wrap}
+.vote-btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);transition:all .2s}
+.vote-btn:hover{background:var(--bg3);color:var(--text)}
+.vote-btn.voted-up{color:var(--buy);background:var(--buy-dim)}
+.vote-btn.voted-dn{color:var(--sell);background:var(--sell-dim)}
+.act-btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:12px;color:var(--muted);transition:all .2s;font-family:'Outfit',sans-serif}
+.act-btn:hover{background:var(--bg3);color:var(--text)}
+.views-lbl{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted2)}
+
+/* ── COMMENTS ── */
+.cmts-wrap{margin-top:12px;border-top:1px solid var(--border);padding-top:12px;display:none}
+.cmts-wrap.open{display:block}
+.cmt-item{display:flex;gap:9px;margin-bottom:10px;animation:fadeUp .25s ease}
+.cmt-bubble{background:var(--bg3);border-radius:8px;padding:9px 12px;flex:1;font-size:12px;line-height:1.65}
+.cmt-author{font-family:'Syne',sans-serif;font-weight:700;font-size:11px;color:var(--ai);margin-bottom:3px}
+.cmt-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted2);margin-left:6px;font-weight:400}
+.cmt-form{display:flex;gap:8px;margin-top:10px}
+.cmt-input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:'Outfit',sans-serif;font-size:12px;outline:none;transition:border-color .2s}
+.cmt-input:focus{border-color:var(--ai)}
+.cmt-submit{background:var(--ai);border:none;color:#fff;padding:8px 14px;border-radius:7px;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;transition:opacity .2s;flex-shrink:0}
+.cmt-submit:hover{opacity:.85}
+
+/* ── RIGHT COL ── */
+.trend-item{display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:opacity .2s}
+.trend-item:last-child{border-bottom:none}
+.trend-item:hover{opacity:.75}
+.trend-rank{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted2);width:16px;flex-shrink:0}
+.trend-content{flex:1;min-width:0}
+.trend-title{font-size:12px;font-weight:600;line-height:1.4;margin-bottom:3px}
+.trend-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.trend-tag{font-size:9px;padding:1px 6px;border-radius:8px;border:1px solid}
+.live-item{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);animation:fadeUp .3s ease}
+.live-item:last-child{border-bottom:none}
+.live-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+.live-text{font-size:12px;color:var(--muted);line-height:1.5}
+.live-text b{color:var(--text)}
+.live-ts{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted2);display:block;margin-top:2px}
+.lb-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.lb-row:last-child{border-bottom:none}
+.lb-rank{font-family:'JetBrains Mono',monospace;font-size:12px;width:22px;font-weight:700}
+.r1{color:var(--gold)}.r2{color:#a0b4c8}.r3{color:var(--hold)}
+.lb-name{flex:1;font-size:13px;font-weight:600}
+.lb-pts{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--buy)}
+
+/* ── TOAST ── */
+.toast-wrap{position:fixed;bottom:22px;right:22px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--card2);border:1px solid var(--border2);border-left-width:3px;border-radius:10px;padding:10px 16px;font-size:12px;display:flex;align-items:center;animation:toastIn .3s ease;box-shadow:0 8px 32px rgba(0,0,0,.5);pointer-events:auto}
+@keyframes toastIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+.toast.out{animation:toastOut .3s ease forwards}
+@keyframes toastOut{to{opacity:0;transform:translateX(16px)}}
+
+/* ── MODAL ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(5px)}
+.modal-bg.open{display:flex}
+.modal-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:26px;max-width:580px;width:92%;animation:modalIn .25s ease;max-height:85vh;overflow-y:auto}
+@keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.modal-hdr-title{font-family:'Syne',sans-serif;font-weight:800;font-size:18px}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:2px 6px;border-radius:4px;transition:color .2s}
+.modal-close:hover{color:var(--text)}
+.modal-fields{display:flex;flex-direction:column;gap:11px}
+.f-inp,.f-ta{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:11px 14px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;outline:none;transition:border-color .2s}
+.f-inp:focus,.f-ta:focus{border-color:var(--ai)}
+.f-inp::placeholder,.f-ta::placeholder{color:var(--muted2)}
+.f-ta{resize:vertical;min-height:110px;line-height:1.65}
+.modal-row{display:flex;gap:10px}
+.modal-sub{width:100%;background:var(--ai);border:none;color:#fff;padding:12px;border-radius:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s;margin-top:4px}
+.modal-sub:hover{opacity:.85}
+.modal-sub:disabled{opacity:.4;cursor:not-allowed}
+
+/* empty / skeleton */
+.empty-state{text-align:center;padding:60px 20px}
+.empty-icon{font-size:44px;margin-bottom:12px;opacity:.4}
+.empty-msg{font-size:14px;color:var(--muted)}
+.skeleton{background:linear-gradient(90deg,var(--card) 25%,var(--card2) 50%,var(--card) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:10px;height:120px;margin-bottom:14px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.load-more{text-align:center;padding:14px}
+.lm-btn{background:var(--bg3);border:1px solid var(--border);color:var(--muted);padding:8px 26px;border-radius:8px;font-family:'Outfit',sans-serif;font-size:13px;cursor:pointer;transition:all .2s}
+.lm-btn:hover{border-color:var(--buy);color:var(--buy)}
+
+/* server notice */
+.srv-notice{background:var(--hold-dim);border:1px solid rgba(245,166,35,.3);border-radius:10px;padding:10px 16px;font-size:12px;color:var(--hold);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.srv-notice b{color:var(--text)}
+.retry-btn{margin-left:auto;background:var(--hold);border:none;color:#000;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;font-size:11px}
+</style>
+</head>
+<body>
+
+<!-- ── TOPBAR ── -->
+<div class="topbar">
+  <a href="trademonk.html" class="logo">
+    <div class="logo-icon">🧘</div>
+    <div class="logo-text">Trade<span>Monk</span></div>
+  </a>
+  <span class="forum-badge">COMMUNITY</span>
+  <div class="topbar-right">
+    <div class="live-count"><span class="live-dot"></span><span id="online-count">—</span>&nbsp;online</div>
+    <div class="conn-pill disconnected" id="conn-pill">⬤ Connecting…</div>
+    <button class="tb-btn primary" onclick="openAskModal()">✦ Ask Question</button>
+    <a href="trademonk.html" class="tb-btn">← Back to App</a>
+  </div>
+</div>
+
+<!-- ── LAYOUT ── -->
+<div class="layout">
+
+  <!-- LEFT -->
+  <div class="left-col" style="display:flex;flex-direction:column;gap:12px">
+    <div class="side-card">
+      <div class="side-title">Topics</div>
+      <div class="topic-item active" onclick="filterTopic('all',this)"><span class="topic-icon">🌐</span><span>All Posts</span><span class="topic-count" id="cnt-all">—</span></div>
+      <div class="topic-item" onclick="filterTopic('bull',this)"><span class="topic-icon">📈</span><span>Bullish Picks</span><span class="topic-count" id="cnt-bull">—</span></div>
+      <div class="topic-item" onclick="filterTopic('bear',this)"><span class="topic-icon">📉</span><span>Bearish Calls</span><span class="topic-count" id="cnt-bear">—</span></div>
+      <div class="topic-item" onclick="filterTopic('analysis',this)"><span class="topic-icon">🔬</span><span>Analysis</span><span class="topic-count" id="cnt-analysis">—</span></div>
+      <div class="topic-item" onclick="filterTopic('strategy',this)"><span class="topic-icon">🧠</span><span>Strategy</span><span class="topic-count" id="cnt-strategy">—</span></div>
+      <div class="topic-item" onclick="filterTopic('news',this)"><span class="topic-icon">📰</span><span>Market News</span><span class="topic-count" id="cnt-news">—</span></div>
+      <div class="topic-item" onclick="filterTopic('qa',this)"><span class="topic-icon">❓</span><span>Q&amp;A</span><span class="topic-count" id="cnt-qa">—</span></div>
+    </div>
+    <div class="side-card">
+      <div class="side-title">Community Stats</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-num" id="stat-posts">—</div><div class="stat-lbl">Total Posts</div></div>
+        <div class="stat-box"><div class="stat-num" id="stat-comments">—</div><div class="stat-lbl">Comments</div></div>
+        <div class="stat-box"><div class="stat-num" style="color:var(--buy)" id="stat-online">—</div><div class="stat-lbl">Online Now</div></div>
+        <div class="stat-box"><div class="stat-num" id="stat-today">—</div><div class="stat-lbl">Today's Posts</div></div>
+      </div>
+    </div>
+    <div class="side-card">
+      <div class="side-title">Hot Tickers</div>
+      <div id="hot-tickers"></div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div style="display:flex;flex-direction:column;gap:14px">
+
+    <!-- server notice -->
+    <div class="srv-notice" id="srv-notice" style="display:none">
+      ⚠️ Cannot reach backend server. Start it: <b>cd server &amp;&amp; node server.js</b>
+      <button class="retry-btn" onclick="retryConn()">Retry</button>
+    </div>
+
+    <div>
+      <h1 style="font-family:'Syne',sans-serif;font-weight:800;font-size:22px">Trader Hub 🏛️</h1>
+      <p style="font-size:13px;color:var(--muted);margin-top:3px">Real-time discussions • Socket.IO + MongoDB</p>
+    </div>
+
+    <!-- COMPOSE -->
+    <div class="compose-card">
+      <div class="compose-top">
+        <div class="avatar" style="background:linear-gradient(135deg,#7c6af5,#00c8e8);width:38px;height:38px">Y</div>
+        <div class="compose-inner">
+          <textarea class="compose-ta" id="compose-text" placeholder="Share a market insight, trade idea or question…" rows="1" oninput="autoResize(this)"></textarea>
+          <div class="compose-row">
+            <select class="c-sel" id="compose-tag">
+              <option value="analysis">📊 Analysis</option>
+              <option value="bull">📈 Bullish</option>
+              <option value="bear">📉 Bearish</option>
+              <option value="strategy">🧠 Strategy</option>
+              <option value="news">📰 News</option>
+              <option value="qa">❓ Q&amp;A</option>
+            </select>
+            <input type="text" class="c-inp" id="compose-ticker" placeholder="Ticker (e.g. NIFTY)" maxlength="30">
+            <button class="post-btn" id="post-btn" onclick="submitPost()">Post →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SORT -->
+    <div class="sort-bar">
+      <span class="sort-lbl">Sort:</span>
+      <button class="sort-btn active" onclick="setSort('hot',this)">🔥 Hot</button>
+      <button class="sort-btn" onclick="setSort('new',this)">🆕 New</button>
+      <button class="sort-btn" onclick="setSort('top',this)">⬆️ Top</button>
+      <div class="search-wrap">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5a7a9a" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Search posts…" id="search-inp" oninput="onSearch(this.value)">
+      </div>
+    </div>
+
+    <!-- FEED -->
+    <div id="posts-feed">
+      <div class="skeleton"></div>
+      <div class="skeleton" style="height:90px;opacity:.6"></div>
+      <div class="skeleton" style="height:70px;opacity:.35"></div>
+    </div>
+    <div class="load-more" id="lm-wrap" style="display:none">
+      <button class="lm-btn" onclick="loadMore()">Load more posts</button>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- RIGHT -->
+  <div class="right-col" style="display:flex;flex-direction:column;gap:12px">
+    <div class="side-card">
+      <div class="side-title">⚡ Live Activity</div>
+      <div id="live-feed"><div style="color:var(--muted);font-size:12px;padding:8px 0">Waiting for activity…</div></div>
+    </div>
+    <div class="side-card">
+      <div class="side-title">🔥 Trending</div>
+      <div id="trending-list"><div style="color:var(--muted);font-size:12px;padding:8px 0">Loading…</div></div>
+    </div>
+    <div class="side-card">
+      <div class="side-title">🏆 Top Contributors</div>
+      <div id="leaderboard"></div>
+    </div>
+  </div>
+
+</div><!-- /layout -->
+
+<!-- ASK MODAL -->
+<div class="modal-bg" id="ask-modal">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <div class="modal-hdr-title">✦ Ask the Community</div>
+      <button class="modal-close" onclick="closeAskModal()">✕</button>
+    </div>
+    <div class="modal-fields">
+      <input type="text" class="f-inp" id="m-title" placeholder="Question title…" maxlength="160">
+      <textarea class="f-ta" id="m-body" placeholder="Add details — more context = better answers…"></textarea>
+      <div class="modal-row">
+        <select class="c-sel" id="m-tag" style="flex:1">
+          <option value="qa">❓ Q&amp;A</option>
+          <option value="analysis">📊 Analysis</option>
+          <option value="strategy">🧠 Strategy</option>
+          <option value="bull">📈 Bullish</option>
+          <option value="bear">📉 Bearish</option>
+          <option value="news">📰 News</option>
+        </select>
+        <input type="text" class="f-inp" id="m-ticker" placeholder="Ticker (optional)" style="flex:1;margin:0" maxlength="20">
+      </div>
+      <button class="modal-sub" id="modal-sub-btn" onclick="submitFromModal()">Post Question →</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOASTS -->
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     JAVASCRIPT — Socket.IO + MongoDB REST API integration
+     ════════════════════════════════════════════════════════ -->
+<script>
+// ── CONFIG ─────────────────────────────────────────────────────
+const API    = 'http://localhost:3000/api';   // Node.js REST API
+const WS_URL = 'http://localhost:3000';       // Socket.IO server
+
+// ── CURRENT USER (guest; replace with auth system later) ───────
+const ME = {
+  name:   'You',
+  avatar: 'Y',
+  color:  '#7c6af5',
+  badge:  '🌱',
+  id:     'guest_' + Math.random().toString(36).slice(2,8),
+};
+
+// ── APP STATE ──────────────────────────────────────────────────
+let posts     = [];
+let myVotes   = JSON.parse(localStorage.getItem('tm_votes') || '{}');
+let openCmts  = {};
+let curFilter = 'all';
+let curSort   = 'hot';
+let searchQ   = '';
+let skip      = 0;
+let hasMore   = false;
+let loading   = false;
+
+// ── STATIC DATA (swap leaderboard for DB call later) ──────────
+const LEADERBOARD = [
+  {name:'AlphaMonk',  pts:'4,821', badge:'🔮'},
+  {name:'NiftyNinja', pts:'3,210', badge:'⚡'},
+  {name:'BullishRaj', pts:'2,870', badge:'📈'},
+  {name:'OptionsOwl', pts:'2,340', badge:'🦉'},
+  {name:'SensexSage', pts:'1,990', badge:'🧙'},
+];
+const HOT_TICKERS = [
+  {sym:'NIFTY50',   chg:'+0.82%', up:true},
+  {sym:'RELIANCE',  chg:'+1.24%', up:true},
+  {sym:'BANKNIFTY', chg:'-0.38%', up:false},
+  {sym:'HDFCBANK',  chg:'-0.71%', up:false},
+  {sym:'TCS',       chg:'+0.55%', up:true},
+  {sym:'INFY',      chg:'+0.33%', up:true},
+];
+
+const TAG_META = {
+  bull:     {label:'📈 Bullish',  cls:'tag-bull'},
+  bear:     {label:'📉 Bearish',  cls:'tag-bear'},
+  analysis: {label:'🔬 Analysis', cls:'tag-analysis'},
+  strategy: {label:'🧠 Strategy', cls:'tag-strategy'},
+  news:     {label:'📰 News',     cls:'tag-news'},
+  qa:       {label:'❓ Q&A',      cls:'tag-qa'},
+};
+
+// ════════════════════════════════════════════════════════════════
+//  SOCKET.IO — real-time connection to Node.js backend
+// ════════════════════════════════════════════════════════════════
+let socket = null;
+
+function initSocket() {
+  try {
+    socket = io(WS_URL, { transports: ['websocket', 'polling'], timeout: 5000 });
+
+    socket.on('connect', () => {
+      setPill('connected', '⬤ Live');
+      document.getElementById('srv-notice').style.display = 'none';
+      showToast('🔌 Connected to live server', 'buy');
+    });
+
+    socket.on('disconnect', () => {
+      setPill('disconnected', '⬤ Disconnected');
+    });
+
+    socket.on('connect_error', () => {
+      setPill('offline', '⬤ Server offline');
+      document.getElementById('srv-notice').style.display = 'flex';
+    });
+
+    // ── Incoming events ─────────────────────────────────────────
+
+    // New post from another user
+    socket.on('new_post', post => {
+      post = normalize(post);
+      posts.unshift(post);
+      renderFeed();
+      renderTrending();
+      updateCounts();
+      addLive('✨', `<b>${esc(post.userName)}</b> posted in ${post.tag}`, 'just now');
+      showToast(`🔴 New post by ${post.userName}`, 'ai');
+    });
+
+    // New comment on any post
+    socket.on('new_comment', ({ postId, comment }) => {
+      const p = posts.find(x => x._id == postId);
+      if (p) p.comments.push(comment);
+      const listEl = document.getElementById(`cmts-${postId}`);
+      if (listEl) listEl.insertAdjacentHTML('beforeend', cmtHtml(comment));
+      const cEl = document.getElementById(`cc-${postId}`);
+      if (cEl && p) cEl.textContent = p.comments.length + ' Comments';
+      addLive('💬', `<b>${esc(comment.userName)}</b> replied to a post`, 'just now');
+    });
+
+    // Vote count updated
+    socket.on('vote_update', ({ postId, votes }) => {
+      const p = posts.find(x => x._id == postId);
+      if (p) p.votes = votes;
+      const el = document.getElementById(`vnum-${postId}`);
+      if (el) { el.textContent = votes; flash(el.closest('.vote-btn')); }
+    });
+
+    // Online count
+    socket.on('online_count', n => {
+      document.getElementById('online-count').textContent = n;
+      document.getElementById('stat-online').textContent  = n;
+    });
+
+  } catch (e) {
+    setPill('offline', '⬤ No socket');
+    document.getElementById('srv-notice').style.display = 'flex';
+  }
+}
+
+function setPill(cls, txt) {
+  const el = document.getElementById('conn-pill');
+  el.className = 'conn-pill ' + cls;
+  el.textContent = txt;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  REST API — talks to Express / MongoDB backend
+// ════════════════════════════════════════════════════════════════
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+// Load posts from MongoDB
+async function loadPosts(append = false) {
+  if (loading) return;
+  loading = true;
+  if (!append) {
+    document.getElementById('posts-feed').innerHTML =
+      '<div class="skeleton"></div><div class="skeleton" style="height:90px;opacity:.6"></div>';
+  }
+  try {
+    const q = new URLSearchParams({ sort: curSort, tag: curFilter, search: searchQ, limit: 10, skip });
+    const data = await api(`/posts?${q}`);
+    const fresh = (data.posts || []).map(normalize);
+    posts = append ? [...posts, ...fresh] : fresh;
+    hasMore = (skip + fresh.length) < (data.total || 0);
+    renderFeed();
+    renderTrending();
+    updateCounts();
+    document.getElementById('lm-wrap').style.display = hasMore ? 'block' : 'none';
+  } catch (e) {
+    document.getElementById('posts-feed').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔌</div>
+        <div class="empty-msg">Cannot load posts — is the server running?<br>
+        <small style="color:var(--muted2)">cd server &amp;&amp; node server.js</small></div>
+      </div>`;
+  }
+  loading = false;
+}
+
+// Load community stats from MongoDB
+async function loadStats() {
+  try {
+    const s = await api('/stats');
+    document.getElementById('stat-posts').textContent    = fmt(s.posts    || 0);
+    document.getElementById('stat-comments').textContent = fmt(s.comments || 0);
+    document.getElementById('stat-today').textContent    = fmt(s.today    || 0);
+  } catch (e) {}
+}
+
+// Submit new post → saved to MongoDB → socket broadcasts to all
+async function submitPost() {
+  const text = document.getElementById('compose-text').value.trim();
+  const tag  = document.getElementById('compose-tag').value;
+  const raw  = document.getElementById('compose-ticker').value.trim().toUpperCase();
+  const tickers = raw ? raw.split(/[,\s]+/).filter(Boolean) : [];
+
+  if (!text || text.length < 5) { showToast('⚠️ Write something first', 'hold'); return; }
+
+  const btn = document.getElementById('post-btn');
+  btn.disabled = true; btn.textContent = 'Posting…';
+
+  try {
+    await api('/posts', {
+      method: 'POST',
+      body: JSON.stringify({
+        title:      text.length > 100 ? text.slice(0, 100) + '…' : text,
+        body:       text, tag, tickers,
+        userName:   ME.name,
+        userAvatar: ME.avatar,
+        userColor:  ME.color,
+        userBadge:  ME.badge,
+      }),
+    });
+    document.getElementById('compose-text').value  = '';
+    document.getElementById('compose-ticker').value = '';
+    skip = 0;
+    loadPosts();
+    loadStats();
+    showToast('✅ Post published!', 'buy');
+    addLive('✦', `<b>You</b> posted in ${tag}`, 'just now');
+  } catch (e) {
+    showToast('❌ Failed — is server running?', 'sell');
+  }
+  btn.disabled = false; btn.textContent = 'Post →';
+}
+
+// Submit question from modal
+async function submitFromModal() {
+  const title  = document.getElementById('m-title').value.trim();
+  const body   = document.getElementById('m-body').value.trim();
+  const tag    = document.getElementById('m-tag').value;
+  const ticker = document.getElementById('m-ticker').value.trim().toUpperCase();
+
+  if (!title || !body) { showToast('⚠️ Fill in all fields', 'hold'); return; }
+
+  const btn = document.getElementById('modal-sub-btn');
+  btn.disabled = true; btn.textContent = 'Posting…';
+
+  try {
+    await api('/posts', {
+      method: 'POST',
+      body: JSON.stringify({
+        title, body, tag,
+        tickers:    ticker ? [ticker] : [],
+        userName:   ME.name,
+        userAvatar: ME.avatar,
+        userColor:  ME.color,
+        userBadge:  ME.badge,
+      }),
+    });
+    closeAskModal();
+    ['m-title','m-body','m-ticker'].forEach(id => { document.getElementById(id).value = ''; });
+    skip = 0;
+    loadPosts();
+    loadStats();
+    showToast('✅ Question posted!', 'buy');
+  } catch (e) {
+    showToast('❌ Failed — is server running?', 'sell');
+  }
+  btn.disabled = false; btn.textContent = 'Post Question →';
+}
+
+// Vote → saved in MongoDB → socket broadcasts new count
+async function doVote(postId, dir) {
+  try {
+    const res = await api(`/posts/${postId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ dir, userId: ME.id }),
+    });
+    // Update local vote state
+    myVotes[postId] = myVotes[postId] === dir ? null : dir;
+    localStorage.setItem('tm_votes', JSON.stringify(myVotes));
+    // Update vote number (socket also fires vote_update)
+    const el = document.getElementById(`vnum-${postId}`);
+    if (el) el.textContent = res.votes;
+    refreshVoteBtns(postId);
+  } catch (e) {
+    showToast('❌ Vote failed', 'sell');
+  }
+}
+
+// Submit comment → saved in MongoDB → socket broadcasts
+async function submitCmt(postId) {
+  const inp  = document.getElementById(`cinp-${postId}`);
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  try {
+    await api(`/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        userName:   ME.name,
+        userAvatar: ME.avatar,
+        userColor:  ME.color,
+        text,
+      }),
+    });
+    // socket 'new_comment' event will update the DOM for everyone
+  } catch (e) {
+    showToast('❌ Comment failed', 'sell');
+    inp.value = text;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  RENDER
+// ════════════════════════════════════════════════════════════════
+function normalize(p) {
+  p._id     = p._id?.$oid || p._id || p.id;
+  p.comments = p.comments || [];
+  p.votes    = p.votes    || 0;
+  p.views    = p.views    || 0;
+  p.tickers  = p.tickers  || [];
+  return p;
+}
+
+function renderFeed() {
+  const el = document.getElementById('posts-feed');
+  if (!posts.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-msg">No posts yet — be the first!</div></div>';
+    return;
+  }
+  el.innerHTML = posts.map(postCard).join('');
+}
+
+function postCard(p) {
+  const tm  = TAG_META[p.tag] || { label: p.tag, cls: 'tag-analysis' };
+  const vUp = myVotes[p._id] === 'up';
+  const vDn = myVotes[p._id] === 'dn';
+  const open = openCmts[p._id] ? 'open' : '';
+  const tkrs = p.tickers.map(t => `<span class="post-ticker">$${esc(t)}</span>`).join('');
+  const cmts = p.comments.map(cmtHtml).join('');
+  const ac   = p.userColor || '#7c6af5';
+  const ts   = p.createdAt ? ago(new Date(p.createdAt)) : (p.time || '—');
+  return `
+<div class="post-card" id="post-${p._id}">
+  <div class="post-hdr">
+    <div class="avatar" style="background:linear-gradient(135deg,${ac},#080b0f);width:38px;height:38px">${esc(p.userAvatar||'?')}</div>
+    <div class="post-meta">
+      <div class="post-author">${esc(p.userBadge||'')} ${esc(p.userName||'Anonymous')}</div>
+      <div class="post-time">${ts}</div>
+    </div>
+    <span class="post-tag ${tm.cls}">${tm.label}</span>
+  </div>
+  ${p.tickers.length ? `<div class="post-tickers">${tkrs}</div>` : ''}
+  <div class="post-title" onclick="toggleCmts('${p._id}')">${esc(p.title)}</div>
+  <div class="post-body">${esc(p.body)}</div>
+  <div class="post-footer">
+    <button class="vote-btn ${vUp?'voted-up':''}" id="vup-${p._id}" onclick="doVote('${p._id}','up')">▲ <span id="vnum-${p._id}">${p.votes}</span></button>
+    <button class="vote-btn ${vDn?'voted-dn':''}" id="vdn-${p._id}" onclick="doVote('${p._id}','dn')">▼</button>
+    <button class="act-btn" onclick="toggleCmts('${p._id}')">💬 <span id="cc-${p._id}">${p.comments.length} Comments</span></button>
+    <button class="act-btn" onclick="sharePost('${p._id}')">🔗 Share</button>
+    <span class="views-lbl">👁 ${fmt(p.views)}</span>
+  </div>
+  <div class="cmts-wrap ${open}" id="cw-${p._id}">
+    <div id="cmts-${p._id}">${cmts}</div>
+    <div class="cmt-form">
+      <div class="avatar" style="background:linear-gradient(135deg,#7c6af5,#080b0f);width:28px;height:28px;font-size:11px">Y</div>
+      <input class="cmt-input" id="cinp-${p._id}" placeholder="Write a reply…" onkeydown="if(event.key==='Enter')submitCmt('${p._id}')">
+      <button class="cmt-submit" onclick="submitCmt('${p._id}')">→</button>
+    </div>
+  </div>
+</div>`;
+}
+
+function cmtHtml(c) {
+  const col = c.userColor || '#7c6af5';
+  const ts  = c.createdAt ? ago(new Date(c.createdAt)) : (c.time || '—');
+  return `<div class="cmt-item">
+    <div class="avatar" style="background:linear-gradient(135deg,${col},#080b0f);width:28px;height:28px;font-size:11px;flex-shrink:0">${esc(c.userAvatar||'?')}</div>
+    <div class="cmt-bubble">
+      <div class="cmt-author">${esc(c.userName||'Anonymous')} <span class="cmt-time">${ts}</span></div>
+      ${esc(c.text)}
+    </div>
+  </div>`;
+}
+
+function renderTrending() {
+  const sorted = [...posts].sort((a,b) => b.votes - a.votes).slice(0, 5);
+  const el = document.getElementById('trending-list');
+  if (!sorted.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">No posts yet</div>'; return; }
+  el.innerHTML = sorted.map((p, i) => {
+    const tm = TAG_META[p.tag] || { label: p.tag, cls: 'tag-analysis' };
+    const t  = esc(p.title);
+    return `<div class="trend-item" onclick="gotoPost('${p._id}')">
+      <span class="trend-rank">${i+1}</span>
+      <div class="trend-content">
+        <div class="trend-title">${t.length>58?t.slice(0,58)+'…':t}</div>
+        <div class="trend-meta">▲ ${p.votes} &nbsp;👁 ${fmt(p.views)} &nbsp;<span class="trend-tag ${tm.cls}">${tm.label}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderLeaderboard() {
+  const ranks = ['r1','r2','r3','',''];
+  const icons = ['🥇','🥈','🥉','4','5'];
+  document.getElementById('leaderboard').innerHTML = LEADERBOARD.map((u,i)=>
+    `<div class="lb-row">
+      <span class="lb-rank ${ranks[i]}">${icons[i]}</span>
+      <span class="lb-name">${u.badge} ${u.name}</span>
+      <span class="lb-pts">${u.pts}</span>
+    </div>`).join('');
+}
+
+function renderHotTickers() {
+  document.getElementById('hot-tickers').innerHTML = HOT_TICKERS.map(t=>
+    `<div class="ticker-row" onclick="onSearch('${t.sym}')">
+      <span class="ticker-sym">$${t.sym}</span>
+      <span class="ticker-chg" style="color:${t.up?'var(--buy)':'var(--sell)'}">${t.chg}</span>
+    </div>`).join('');
+}
+
+function updateCounts() {
+  document.getElementById('cnt-all').textContent = posts.length;
+  ['bull','bear','analysis','strategy','news','qa'].forEach(t => {
+    const el = document.getElementById('cnt-' + t);
+    if (el) el.textContent = posts.filter(p => p.tag === t).length;
+  });
+}
+
+function addLive(icon, html, ts) {
+  const el  = document.getElementById('live-feed');
+  const div = document.createElement('div');
+  div.className = 'live-item';
+  div.innerHTML = `<span class="live-icon">${icon}</span><div class="live-text">${html}<span class="live-ts">${ts}</span></div>`;
+  el.prepend(div);
+  while (el.children.length > 7) el.removeChild(el.lastChild);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  UI ACTIONS
+// ════════════════════════════════════════════════════════════════
+function toggleCmts(pid) {
+  openCmts[pid] = !openCmts[pid];
+  const el = document.getElementById('cw-' + pid);
+  if (el) {
+    el.classList.toggle('open', !!openCmts[pid]);
+    if (openCmts[pid]) document.getElementById('cinp-' + pid)?.focus();
+  }
+}
+
+function refreshVoteBtns(pid) {
+  const vUp = myVotes[pid] === 'up';
+  const vDn = myVotes[pid] === 'dn';
+  const up  = document.getElementById('vup-' + pid);
+  const dn  = document.getElementById('vdn-' + pid);
+  if (up) up.className = 'vote-btn ' + (vUp ? 'voted-up' : '');
+  if (dn) dn.className = 'vote-btn ' + (vDn ? 'voted-dn' : '');
+}
+
+function filterTopic(tag, el) {
+  curFilter = tag; skip = 0;
+  document.querySelectorAll('.topic-item').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  loadPosts();
+}
+
+function setSort(sort, el) {
+  curSort = sort; skip = 0;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  loadPosts();
+}
+
+let _sd;
+function onSearch(q) {
+  searchQ = q; skip = 0;
+  clearTimeout(_sd);
+  _sd = setTimeout(loadPosts, 350);
+}
+
+function loadMore() { skip += 10; loadPosts(true); }
+
+function sharePost(pid) {
+  navigator.clipboard?.writeText(location.href.split('#')[0] + '#post-' + pid);
+  showToast('🔗 Link copied!', 'cyan');
+}
+
+function gotoPost(pid) {
+  const el = document.getElementById('post-' + pid);
+  if (el) el.scrollIntoView({ behavior: 'smooth' });
+}
+
+function retryConn() {
+  document.getElementById('srv-notice').style.display = 'none';
+  setPill('disconnected', '⬤ Retrying…');
+  socket?.connect();
+  loadPosts();
+  loadStats();
+}
+
+function openAskModal()  { document.getElementById('ask-modal').classList.add('open'); document.getElementById('m-title').focus(); }
+function closeAskModal() { document.getElementById('ask-modal').classList.remove('open'); }
+document.getElementById('ask-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('ask-modal')) closeAskModal();
+});
+
+// ════════════════════════════════════════════════════════════════
+//  UTILITIES
+// ════════════════════════════════════════════════════════════════
+function esc(s = '') {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmt(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
+function flash(el) { if (!el) return; el.style.transform='scale(1.2)'; setTimeout(()=>el.style.transform='',280); }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,200)+'px'; }
+function ago(d) {
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60)    return 'just now';
+  if (s < 3600)  return Math.floor(s/60)   + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+function showToast(msg, type='ai') {
+  const colors = { buy:'var(--buy)', sell:'var(--sell)', hold:'var(--hold)', ai:'var(--ai)', cyan:'var(--cyan)' };
+  const wrap = document.getElementById('toast-wrap');
+  const div  = document.createElement('div');
+  div.className = 'toast';
+  div.style.borderLeftColor = colors[type] || colors.ai;
+  div.textContent = msg;
+  wrap.appendChild(div);
+  setTimeout(() => { div.classList.add('out'); setTimeout(() => div.remove(), 320); }, 3500);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════════
+window.addEventListener('load', () => {
+  initSocket();
+  loadPosts();
+  loadStats();
+  renderLeaderboard();
+  renderHotTickers();
+});
+</script>
+</body>
+</html>
